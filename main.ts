@@ -1,41 +1,63 @@
-// A working best-game-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. A starting point, not a winner: Block Dodger, a
-// plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a title screen,
-// score, lives and levels, game over and restart, flat colours and no sound. Build your own game
-// (any genre, any library you vendor under game/, or none), put your 3 or 4 PNG or JPEG screenshots
-// in screenshots/ (the first by name is the cover) and run it.
+// Ink & Light — hand-in script for the best-stealth bounty (Agent 2).
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
+// What this file does, in one sentence: it stages the finished game for the
+// judge. It takes the playable files in ./game and the four stills in
+// ./screenshots, lays them out under the output folder the grader points at,
+// and asks the vendored make.fun helper to write the dossier.json summary
+// next to them. Nothing here touches the game itself — the game is already
+// built; this file is only the courier that delivers it, nothing more.
+//
+// Local trial run (no grader container needed):
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Then peek at out/dossier.json to confirm the hand-in looks right.
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+// Folder this script lives in — game/ and screenshots/ sit beside it.
+function scriptDir(): string {
+  return fileURLToPath(new URL('.', import.meta.url));
+}
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// Where the hand-in goes: the grader's folder when set, /output otherwise.
+function outputDir(): string {
+  return process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+}
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
+// Copy a whole directory tree, creating the destination first.
+function mirror(source: string, destination: string): void {
+  mkdirSync(destination, { recursive: true });
+  cpSync(source, destination, { recursive: true });
+}
+
+function handIn(): void {
+  const root = scriptDir();
+  const dest = outputDir();
+
+  mkdirSync(dest, { recursive: true });
+  mirror(join(root, 'game'), join(dest, 'game'));
+
+  const shots = join(dest, 'screenshots');
+  mkdirSync(shots, { recursive: true });
+  const localShots = join(root, 'screenshots');
+  if (existsSync(localShots)) cpSync(localShots, shots, { recursive: true });
+
+  // Caps the scorer enforces (reference/gate.json). text_max_bytes is the
+  // only one that shapes the dossier bytes; the rest mirror the scorer's
+  // refusals — too many or too heavy screenshots, a game folder over 993
+  // files or 48 MiB in total, or a game path longer than 1000 bytes.
+  const dossier = buildDossier(dest, {
     text_max_bytes: 163840,
     screenshots: { max: 4, max_bytes: 262144 },
     game_max_files: 993,
     game_max_bytes: 50331648,
     game_path_max_bytes: 1000,
-  }),
-);
+  });
+  writeFileSync(join(dest, 'dossier.json'), dossier);
+
+  console.log(`Ink & Light hand-in complete: game + 4 screenshots staged under ${dest}`);
+}
+
+handIn();
